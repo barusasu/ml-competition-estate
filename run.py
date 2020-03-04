@@ -4,6 +4,7 @@ import lightgbm as lgb
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import KFold
 
 with open("names.json", "r", encoding='utf-8') as f:
     d = json.load(f)
@@ -63,24 +64,32 @@ X = model_input[['Type', 'TimeToNearestStation','FloorPlan', 'FloorAreaRatio', '
 y = model_input['y']
 
 # カテゴリ変数
-categorical_features = ['Type','NearestStation','FloorPlan','CityPlanning','Structure', 'Direction', 'Classification', 'Municipality']
+categorical_features = [['Type','NearestStation','FloorPlan','CityPlanning','Structure', 'Direction', 'Classification', 'Municipality']]
 
-train_x, valid_x, train_y, valid_y = train_test_split(X, y, test_size=0.33, random_state=0)
+
+# train_x, valid_x, train_y, valid_y = train_test_split(X, y, test_size=0.33, random_state=0)
+cv = KFold(n_splits=5, shuffle=True)
+for i, (train_index, valid_index) in enumerate(cv.split(X, y)):
+    train_x = X.iloc[train_index]
+    valid_x = X.iloc[valid_index]
+    train_y = y.iloc[train_index]
+    valid_y = y.iloc[valid_index]
+
 
 # lgb_train = lgb.Dataset(train_x, train_y, categorical_feature=categorical_features)
 # lgb_eval = lgb.Dataset(valid_x, valid_y,  categorical_feature=categorical_features)
-lgb_train = lgb.Dataset(train_x, train_y)
-lgb_eval = lgb.Dataset(valid_x, valid_y)
+    lgb_train = lgb.Dataset(train_x, train_y)
+    lgb_eval = lgb.Dataset(valid_x, valid_y)
 
-lgbm_params = {'objective': 'regression',
-              'metric':{'rmse'}}
+    lgbm_params = {'objective': 'regression',
+                'metric':{'rmse'}}
 
-gbm = lgb.train(params=lgbm_params,
-               train_set=lgb_train,
-               valid_sets=[lgb_train, lgb_eval],
-                num_boost_round=10000,
-               early_stopping_rounds=100,
-               verbose_eval=50)
+    gbm = lgb.train(params=lgbm_params,
+                train_set=lgb_train,
+                valid_sets=[lgb_train, lgb_eval],
+                    num_boost_round=10000,
+                early_stopping_rounds=100,
+                verbose_eval=50)
 
-predicted = gbm.predict(valid_x)
-print(np.sqrt(mean_squared_error(valid_y, predicted)))
+# predicted = gbm.predict(valid_x)
+# print(np.sqrt(mean_squared_error(valid_y, predicted)))
