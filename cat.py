@@ -1,8 +1,10 @@
 import json
+import math
 import pandas as pd
-import lightgbm as lgb
 import numpy as np
 import category_encoders as ce
+from catboost import CatBoost
+from catboost import Pool
 # import optuna
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
@@ -62,16 +64,9 @@ train['Maisonette'] = train['FloorPlan'].map(lambda x: 1 if 'メゾネット' in
 train['OpenFloor'] = train['FloorPlan'].map(lambda x: 1 if 'オープンフロア' in str(x) else 0)
 train['Studio'] = train['FloorPlan'].map(lambda x: 1 if 'スタジオ' in str(x) else 0)
 
-# 間口
-train['Frontage'] = train['Frontage'].replace('50.0m以上', '50')
-train['Frontage'] = pd.to_numeric(train['Frontage'], errors='coerce')
-
-# 建物面積
-train['BuildArea'] = train['Area'] * train['CoverageRatio']
 
 Label_Enc_list = ['Type','NearestStation','FloorPlan','CityPlanning','Structure',
-                 'Direction', 'Classification', 'Municipality', 'Region', 'Remarks',
-                 'Renovation', 'Purpose', 'LandShape', 'Use']
+                 'Direction', 'Classification', 'Municipality', 'Region', 'Remarks', 'Renovation']
 ce_oe = ce.OrdinalEncoder(cols=Label_Enc_list,handle_unknown='impute')
 # 文字を序数に変換
 train = ce_oe.fit_transform(train)
@@ -89,13 +84,13 @@ for i in Label_Enc_list:
 X = train[['TimeToNearestStation','FloorAreaRatio', 'CityPlanning',
                  'BuildingAD','Structure','Direction', 'Area', 'Classification', 'Breadth',
                   'CoverageRatio','Municipality', 'Quarter', 'Region', 'Remarks', 'Renovation',
-                  'L', 'D', 'K', 'OpenFloor', 'Purpose', 'LandShape', 'Use', 'Frontage', 'BuildArea']]
+                  'L', 'D', 'K', 'OpenFloor']]
 y = train['y']
 
 # カテゴリ変数
 categorical_features = ['CityPlanning','Structure', 'Direction',
-                         'Classification', 'Municipality', 'Region', 'Remarks', 
-                         'Renovation', 'Purpose', 'LandShape', 'Use']
+                         'Classification', 'Municipality', 'Region', 'Remarks', 'Renovation']
+
 
 cv = KFold(n_splits=3, shuffle=True, random_state=123)
 for i, (train_index, valid_index) in enumerate(cv.split(X, y)):
@@ -104,21 +99,19 @@ for i, (train_index, valid_index) in enumerate(cv.split(X, y)):
     train_y = y.iloc[train_index]
     valid_y = y.iloc[valid_index]
 
-    lgb_train = lgb.Dataset(train_x, train_y)
-    lgb_eval = lgb.Dataset(valid_x, valid_y)
+    train_pool = Pool(train_x, label=train_y)
+    test_pool = Pool(valid_x, label=valid_y)
 
-    lgbm_params = {'objective': 'mean_squared_error',
-                'metric':{'rmse'},}
+    params = {
+        'loss_function': 'RMSE',
+        'num_boost_round': 1000,
+        'early_stopping_rounds': 10,
+    }
+    model = CatBoost(params)
+    model.fit(train_pool, eval_set=[test_pool])
 
-    gbm = lgb.train(params=lgbm_params,
-                train_set=lgb_train,
-                valid_sets=[lgb_train, lgb_eval],
-                    num_boost_round=10000,
-                early_stopping_rounds=100,
-                verbose_eval=50,
-                categorical_feature=categorical_features,)
-
-
+feature_importance = model.get_feature_importance()
+print(feature_importance)
 
 #-------------------------
 # テストデータに対する出力
@@ -162,16 +155,8 @@ test['Maisonette'] = test['FloorPlan'].map(lambda x: 1 if 'メゾネット' in s
 test['OpenFloor'] = test['FloorPlan'].map(lambda x: 1 if 'オープンフロア' in str(x) else 0)
 test['Studio'] = test['FloorPlan'].map(lambda x: 1 if 'スタジオ' in str(x) else 0)
 
-# 間口
-test['Frontage'] = test['Frontage'].replace('50.0m以上', '50')
-test['Frontage'] = pd.to_numeric(test['Frontage'], errors='coerce')
-
-# 建物面積
-test['BuildArea'] = test['Area'] * test['CoverageRatio']
-
 Label_Enc_list = ['Type','NearestStation','FloorPlan','CityPlanning','Structure',
-                 'Direction', 'Classification', 'Municipality', 'Region', 'Remarks', 
-                 'Renovation', 'Purpose', 'LandShape', 'Use']
+                 'Direction', 'Classification', 'Municipality', 'Region', 'Remarks', 'Renovation']
 ce_oe = ce.OrdinalEncoder(cols=Label_Enc_list,handle_unknown='impute')
 # 文字を序数に変換
 test = ce_oe.fit_transform(test)
@@ -186,15 +171,13 @@ for i in Label_Enc_list:
 X_test = test[['TimeToNearestStation', 'FloorAreaRatio', 'CityPlanning',
                  'BuildingAD','Structure','Direction', 'Area', 'Classification', 'Breadth',
                   'CoverageRatio','Municipality', 'Quarter', 'Region', 'Remarks', 'Renovation',
-                  'L', 'D', 'K', 'OpenFloor', 'Purpose', 'LandShape', 'Use', 'Frontage', 'BuildArea']]
+                  'L', 'D', 'K', 'OpenFloor']]
 
-test_predicted = gbm.predict(X_test)
+test_predicted = model.predict(X_test)
 
 submit_df = pd.DataFrame({'y': test_predicted})
 submit_df.index.name = 'id'
 submit_df.index = submit_df.index + 1
 submit_df.to_csv('submission.csv')
 
-# importanceを表示する
-importance = pd.DataFrame(gbm.feature_importance(), index=X.columns, columns=['importance'])
-print(importance)
+
