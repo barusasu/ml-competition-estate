@@ -67,7 +67,7 @@ train['Frontage'] = train['Frontage'].replace('50.0m以上', '50')
 train['Frontage'] = pd.to_numeric(train['Frontage'], errors='coerce')
 
 # 建物面積
-train['BuildArea'] = train['Area'] * train['CoverageRatio']
+train['BuildArea'] = train['Area'] * train['CoverageRatio']*0.01
 
 Label_Enc_list = ['Type','NearestStation','FloorPlan','CityPlanning','Structure',
                  'Direction', 'Classification', 'Municipality', 'Region', 'Remarks',
@@ -167,7 +167,7 @@ test['Frontage'] = test['Frontage'].replace('50.0m以上', '50')
 test['Frontage'] = pd.to_numeric(test['Frontage'], errors='coerce')
 
 # 建物面積
-test['BuildArea'] = test['Area'] * test['CoverageRatio']
+test['BuildArea'] = test['Area'] * test['CoverageRatio']*0.01
 
 Label_Enc_list = ['Type','NearestStation','FloorPlan','CityPlanning','Structure',
                  'Direction', 'Classification', 'Municipality', 'Region', 'Remarks', 
