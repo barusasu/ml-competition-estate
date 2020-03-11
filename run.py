@@ -89,15 +89,18 @@ for i in Label_Enc_list:
 X = train[['TimeToNearestStation','FloorAreaRatio', 'CityPlanning',
                  'BuildingAD','Structure','Direction', 'Area', 'Classification', 'Breadth',
                   'CoverageRatio','Municipality', 'Quarter', 'Region', 'Remarks', 'Renovation',
-                  'L', 'D', 'K', 'OpenFloor', 'Purpose', 'LandShape', 'Use', 'Frontage', 'BuildArea']]
+                  'L', 'D', 'K', 'OpenFloor', 'Purpose', 'LandShape', 'Use', 'Frontage', 'BuildArea',
+                  'NearestStation']]
 y = train['y']
 
 # カテゴリ変数
 categorical_features = ['CityPlanning','Structure', 'Direction',
                          'Classification', 'Municipality', 'Region', 'Remarks', 
-                         'Renovation', 'Purpose', 'LandShape', 'Use']
+                         'Renovation', 'Purpose', 'LandShape', 'Use', 'NearestStation']
 
-cv = KFold(n_splits=3, shuffle=True, random_state=123)
+score_list = []
+models = []
+cv = KFold(n_splits=5, shuffle=True, random_state=123)
 for i, (train_index, valid_index) in enumerate(cv.split(X, y)):
     train_x = X.iloc[train_index]
     valid_x = X.iloc[valid_index]
@@ -107,7 +110,7 @@ for i, (train_index, valid_index) in enumerate(cv.split(X, y)):
     lgb_train = lgb.Dataset(train_x, train_y)
     lgb_eval = lgb.Dataset(valid_x, valid_y)
 
-    lgbm_params = {'objective': 'mean_squared_error',
+    lgbm_params = {'objective': 'regression',
                 'metric':{'rmse'},}
 
     gbm = lgb.train(params=lgbm_params,
@@ -117,7 +120,10 @@ for i, (train_index, valid_index) in enumerate(cv.split(X, y)):
                 early_stopping_rounds=100,
                 verbose_eval=50,
                 categorical_feature=categorical_features,)
-
+    pred = gbm.predict(valid_x)
+    score_list.append(mean_squared_error(valid_y, pred))
+    models.append(gbm)
+print(score_list, '平均score', round(np.mean(score_list), 2))
 
 
 #-------------------------
@@ -186,9 +192,10 @@ for i in Label_Enc_list:
 X_test = test[['TimeToNearestStation', 'FloorAreaRatio', 'CityPlanning',
                  'BuildingAD','Structure','Direction', 'Area', 'Classification', 'Breadth',
                   'CoverageRatio','Municipality', 'Quarter', 'Region', 'Remarks', 'Renovation',
-                  'L', 'D', 'K', 'OpenFloor', 'Purpose', 'LandShape', 'Use', 'Frontage', 'BuildArea']]
+                  'L', 'D', 'K', 'OpenFloor', 'Purpose', 'LandShape', 'Use', 'Frontage', 'BuildArea',
+                  'NearestStation']]
 
-test_predicted = gbm.predict(X_test)
+test_predicted = np.mean([model.predict(X_test) for model in models], axis=0)
 
 submit_df = pd.DataFrame({'y': test_predicted})
 submit_df.index.name = 'id'
