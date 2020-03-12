@@ -20,12 +20,13 @@ test = test.rename(columns=d)
 # 前処理
 #-----------------------
 # 外れ値除外
-train = train[train['y'] < (90)]
+train = train[train['y'] < (100)]
 
 # 面積
 train['Area'] = train['Area'].replace('2000㎡以上', '2000')
 train['Area'] = train['Area'].replace('5000㎡以上', '5000')
 train['Area'] = pd.to_numeric(train['Area'], errors='coerce')
+train = train[train['Area'] < 200]
 
 # 最寄駅：距離（分）には数値以外の値が含まれているので、適当な値に置換する
 train['TimeToNearestStation'] = train['TimeToNearestStation'].replace('30分?60分', '45')
